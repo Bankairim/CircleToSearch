@@ -38,8 +38,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -73,6 +75,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.BorderOuter
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -133,6 +136,10 @@ import androidx.webkit.WebViewFeature
 import com.akslabs.circletosearch.data.isDirectUpload
 import kotlin.math.max
 import kotlin.math.min
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import android.os.Build
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -149,7 +156,22 @@ fun CircleToSearchScreen(
     // Support Sheet State
     var showSupportSheet by remember { mutableStateOf(false) }
     val supportSheetState = rememberModalBottomSheetState()
-    
+
+    // Material You logic for colors
+    val isDark = isSystemInDarkTheme()
+    val dynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val colorScheme = when {
+        dynamicColor && isDark -> dynamicDarkColorScheme(context)
+        dynamicColor && !isDark -> dynamicLightColorScheme(context)
+        else -> MaterialTheme.colorScheme // Fallback standard
+    }
+    //Colors for dark theme
+    val barBgColor = if (isDark) Color(0xFF0D0D0D) else colorScheme.surface
+    val bubbleColor = if (isDark) Color(0xFF1F1F1F) else colorScheme.secondaryContainer.copy(alpha = 0.9f)
+    val contentColor = if (isDark) Color.White else colorScheme.onSecondaryContainer
+
+    //Haptic feedback
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     // Search Engines Order Logic
     val preferredOrder = remember(uiPreferences.getSearchEngineOrder()) {
@@ -167,6 +189,7 @@ fun CircleToSearchScreen(
         }
     }
     val searchEngines = preferredOrder
+
 
     // Support Settings Sheet
     var showSettingsScreen by remember { mutableStateOf(false) }
@@ -932,7 +955,11 @@ fun CircleToSearchScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = onClose,
+                    onClick =
+                        {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            onClose()
+                        },
                     modifier = Modifier
                         .background(Color.Gray.copy(alpha = 0.5f), CircleShape)
                         .size(40.dp)
@@ -940,13 +967,24 @@ fun CircleToSearchScreen(
                     Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = selectedEngine.name,
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
+                if (selectedEngine.name == "Google") {
+                    // Si c'est Google, on affiche ta belle typo officielle
+                    Image(
+                        painter = painterResource(id = com.akslabs.circletosearch.R.drawable.googletypo),
+                        contentDescription = "Google Search",
+                        modifier = Modifier.height(50.dp), // Hauteur ajustable selon ton PNG
+                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White)
                     )
-                )
+                } else {
+                    // Si c'est Bing, Yandex, etc., on garde le texte stylé d'origine
+                    Text(
+                        text = selectedEngine.name,
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    )
+                }
                 Spacer(modifier = Modifier.weight(1f))
                 
                 // Action Button (Menu)
@@ -957,7 +995,10 @@ fun CircleToSearchScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     var showMenu by remember { mutableStateOf(false) }
-                    IconButton(onClick = { showMenu = true }) {
+                    IconButton(onClick = {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        showMenu = true
+                    }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.White)
                     }
                 
@@ -1062,91 +1103,110 @@ fun CircleToSearchScreen(
                         )
                     }
                 }
-            }      // 5. Search Bar / Pill (Bottom Fixed) - Clickable to open sheet
-            Box(
+            }      // 5. Search Bar / Pill (Bottom Fixed)
+            // 5. Search Bar / Pill (Bottom Fixed)
+            androidx.compose.material3.Surface(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 24.dp)
-                    .shadow(8.dp, CircleShape)
-                    .background(Color(0xFF1F1F1F), CircleShape)
-                    .height(64.dp)
-                    .padding(horizontal = 20.dp)
-                    .pointerInput(Unit) {
-                        detectTapGestures {
-                            scope.launch { 
-                                scaffoldState.bottomSheetState.expand()
-                            }
-                        }
-                    }
+                    .height(64.dp),
+                shape = CircleShape,
+                color = barBgColor, // Utilise la couleur dynamique/pitch black
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    color = contentColor.copy(alpha = 0.1f) // Bordure subtile assortie
+                ),
+                shadowElevation = 12.dp
             ) {
                 Row(
-                    modifier = Modifier.align(Alignment.CenterStart),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (selectedBitmap != null) {
-                        Image(
-                            bitmap = selectedBitmap!!.asImageBitmap(),
-                            contentDescription = "Selected",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .border(1.dp, Color.Gray, RoundedCornerShape(12.dp))
-                        )
-                    } else {
-                        // G Logo
-                        Row {
-                            Text("G", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = Color(0xFF4285F4)))
-                            Text("o", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = Color(0xFFEA4335)))
-                            Text("o", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = Color(0xFFFBBC05)))
-                            Text("g", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = Color(0xFF4285F4)))
-                            Text("l", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = Color(0xFF34A853)))
-                            Text("e", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = Color(0xFFEA4335)))
+                    // Left: App Logo
+                    Image(
+                        painter = painterResource(id = com.akslabs.circletosearch.R.drawable.circletosearch),
+                        contentDescription = "Logo",
+                        modifier = Modifier
+                            .size(50.dp)
+                            .clickable {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                scope.launch { scaffoldState.bottomSheetState.expand() }
+                            }
+                    )
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Right: Actions Container
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Social/Contribution Bubble (Anthracite / Dynamic)
+                        androidx.compose.material3.Surface(
+                            shape = CircleShape,
+                            color = bubbleColor, // Utilise l'anthracite ou le container dynamique
+                            modifier = Modifier.height(44.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            ) {
+                                // Boutons sociaux - On utilise contentColor pour les icônes
+                                val socialButtons = listOf(
+                                    com.akslabs.circletosearch.R.drawable.telegram to "https://t.me/akslabs",
+                                    com.akslabs.circletosearch.R.drawable.github to "https://github.com/aks-labs"
+                                )
+
+                                socialButtons.forEach { (iconRes, url) ->
+                                    IconButton(onClick = {
+                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                                    }, modifier = Modifier.size(36.dp)) {
+                                        Icon(painterResource(id = iconRes), null, tint = contentColor, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+
+                                IconButton(onClick = { showSupportSheet = true }, modifier = Modifier.size(36.dp)) {
+                                    Icon(painterResource(id = com.akslabs.circletosearch.R.drawable.donation), null, tint = contentColor, modifier = Modifier.size(20.dp))
+                                }
+                            }
                         }
-                    }
-                }
-                
-                Row(
-                    modifier = Modifier.align(Alignment.CenterEnd),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
 
-                    IconButton(onClick = {
-                        showSupportSheet = true
-                    }, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            painter = painterResource(id = com.akslabs.circletosearch.R.drawable.donation),
-                            contentDescription = "Donate",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(3.dp))
-                    IconButton(onClick = {
-                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/aks-labs"))
-                        context.startActivity(intent)
-                    }, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            painter = painterResource(id = com.akslabs.circletosearch.R.drawable.github),
-                            contentDescription = "Github",
-                            tint = Color.White,
-                            modifier = Modifier.size(23.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(3.dp))
-                    IconButton(onClick = {
-                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://t.me/akslabs"))
-                        context.startActivity(intent)
-                    }, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            painter = painterResource(id = com.akslabs.circletosearch.R.drawable.telegram),
-                            contentDescription = "Telegram",
-                            tint = Color.White,
-                            modifier = Modifier.size(23.dp)
-                        )
+                        // Fullscreen Scan Bubble (Anthracite / Dynamic)
+                        androidx.compose.material3.Surface(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .clickable {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    if (screenshot != null) {
+                                        val rect = Rect(0, 0, screenshot.width, screenshot.height)
+                                        selectionRect = rect
+                                        currentPathPoints.clear()
+                                        scope.launch {
+                                            selectionAnim.snapTo(0f)
+                                            selectionAnim.animateTo(1f, tween(600))
+                                            selectedBitmap = screenshot
+                                            isSearching = true
+                                        }
+                                    }
+                                },
+                            shape = CircleShape,
+                            color = bubbleColor // Même couleur anthracite/dynamique
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Fullscreen,
+                                    contentDescription = "Scan All",
+                                    tint = contentColor, // Icone blanche en sombre, colorée en clair
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
