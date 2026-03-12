@@ -67,12 +67,9 @@ fun searchWithGoogleLens(uri: Uri, context: Context): Boolean {
                 setPackage("com.google.android.googlequicksearchbox")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 
-                // Force a separate task that acts as a temporary document
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
-                addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-                addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
-                addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
+                // NE PAS mettre FLAG_ACTIVITY_NO_HISTORY
+                // NE PAS mettre FLAG_ACTIVITY_NEW_DOCUMENT
+
             }
 
             context.startActivity(lensIntent)
@@ -92,9 +89,6 @@ fun searchWithGoogleLens(uri: Uri, context: Context): Boolean {
                     putExtra("lens", true) // Hint to open in Lens mode
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    // Prevent task from sticking in recents and history
-                    addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
-                    addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
                 }
 
                 context.startActivity(GalleryIntent)
@@ -134,13 +128,6 @@ fun searchWithGoogleLens(uri: Uri, context: Context): Boolean {
                     setPackage("com.google.android.googlequicksearchbox")
                     data = contentUri
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-
-                    // Apply the document and no-history combo
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
-                    addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-                    addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
-                    addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
                 }
 
                 context.startActivity(googleIntent)

@@ -51,9 +51,6 @@ class OverlayActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-
-        // À chaque nouveau lancement, on met à jour la clé pour forcer Compose à tout nettoyer
-        sessionKey.value = System.currentTimeMillis()
         loadScreenshot()
     }
 
@@ -74,7 +71,10 @@ class OverlayActivity : ComponentActivity() {
             overridePendingTransition(0, 0)
         }
     }
+    override fun onResume() {
+        super.onResume()
 
+    }
     override fun onDestroy() {
         super.onDestroy()
         if (isFinishing) {

@@ -158,6 +158,7 @@ fun CircleToSearchScreen(
     var showSupportSheet by remember { mutableStateOf(false) }
     val supportSheetState = rememberModalBottomSheetState()
 
+
     // Material You logic for colors
     val isDark = isSystemInDarkTheme()
     val dynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -458,7 +459,6 @@ fun CircleToSearchScreen(
             handleSmartExit()
         }
     }
-
     androidx.compose.material3.BottomSheetScaffold(
         scaffoldState = scaffoldState,
         sheetPeekHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * 0.55f), // Dynamic 55% peek
@@ -547,10 +547,9 @@ fun CircleToSearchScreen(
 
                             // Prepare content URI for Lens (using existing FileProvider logic in helper)
                             val success = searchWithGoogleLens(uri, context)
-
                             if (success) {
-                                // Close the overlay since Lens is taking over
-                                onClose()
+                                // On ne fait RIEN. On ne ferme pas, on ne cache rien.
+                                // On attend simplement que l'utilisateur revienne.
                                 return@LaunchedEffect
                             } else {
                                 // Fallback to multi-search if Lens failed
@@ -744,7 +743,7 @@ fun CircleToSearchScreen(
                 }
             }
         }
-    ) { _ ->
+    ) { _ ->}
         // Root Box
         Box(
             modifier = Modifier
@@ -1321,7 +1320,7 @@ fun CircleToSearchScreen(
 
     }
 }
-}
+
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @androidx.compose.ui.tooling.preview.Preview
