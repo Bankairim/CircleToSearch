@@ -140,6 +140,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import android.os.Build
+import com.akslabs.circletosearch.CircleToSearchAccessibilityService
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -428,14 +429,28 @@ fun CircleToSearchScreen(
     // Back Handler Logic
     BackHandler(enabled = true) {
         val currentWebView = webViews[selectedEngine]
+
         if (currentWebView != null && currentWebView.canGoBack()) {
             currentWebView.goBack()
         } else if (scaffoldState.bottomSheetState.currentValue == androidx.compose.material3.SheetValue.Expanded) {
-             scope.launch { scaffoldState.bottomSheetState.partialExpand() }
+            scope.launch { scaffoldState.bottomSheetState.partialExpand() }
         } else if (scaffoldState.bottomSheetState.currentValue == androidx.compose.material3.SheetValue.PartiallyExpanded) {
-             scope.launch { scaffoldState.bottomSheetState.hide() }
+            scope.launch { scaffoldState.bottomSheetState.hide() }
         } else {
-            onClose()
+            // --- LA MAGIE DU DOUBLE-CLIC ---
+            scope.launch {
+                // 1. Premier clic : ouvre le gestionnaire
+                CircleToSearchAccessibilityService.openRecents()
+
+                // 2. On attend 100ms (le temps que le système réagisse)
+                delay(100)
+
+                // 3. Deuxième clic : sur Android, ça bascule sur l'appli précédente !
+                CircleToSearchAccessibilityService.openRecents()
+
+                // 4. On ferme l'overlay
+                onClose()
+            }
         }
     }
 
@@ -518,16 +533,16 @@ fun CircleToSearchScreen(
                 LaunchedEffect(selectedBitmap, hostedImageUrl) {
                     if (selectedBitmap != null) {
                         isLoading = true
-                        
+
                         // 1. Google Lens Only Mode Check
                         if (uiPreferences.isUseGoogleLensOnly()) {
                             // Save to cache and launch Lens
                             val path = ImageUtils.saveBitmap(context, selectedBitmap!!)
                             val uri = android.net.Uri.fromFile(java.io.File(path))
-                            
+
                             // Prepare content URI for Lens (using existing FileProvider logic in helper)
                             val success = searchWithGoogleLens(uri, context)
-                            
+
                             if (success) {
                                 // Close the overlay since Lens is taking over
                                 onClose()
@@ -714,8 +729,8 @@ fun CircleToSearchScreen(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .zIndex(if (isSelected) 1f else 0f)
-                                        .graphicsLayer { 
-                                            alpha = if (isSelected) 1f else 0f 
+                                        .graphicsLayer {
+                                            alpha = if (isSelected) 1f else 0f
                                         }
                                 )
                              }
@@ -823,18 +838,18 @@ fun CircleToSearchScreen(
                                         maxX = max(maxX, p.x)
                                         maxY = max(maxY, p.y)
                                     }
-                                    
+
                                     val rect = Rect(
                                         minX.toInt(),
                                         minY.toInt(),
                                         maxX.toInt(),
                                         maxY.toInt()
                                     )
-                                    
+
                                     selectionRect = rect
                                     // Clear points to remove the drawn line and show the lens rect
-                                    currentPathPoints.clear() 
-                                    
+                                    currentPathPoints.clear()
+
                                     scope.launch {
                                         selectionAnim.animateTo(
                                             targetValue = 1f,
@@ -977,11 +992,18 @@ fun CircleToSearchScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        onClick =
-                            {
-                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        onClick = {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+
+                            scope.launch {
+                                // Double appui pour switcher d'appli
+                                CircleToSearchAccessibilityService.openRecents()
+                                delay(50)
+                                CircleToSearchAccessibilityService.openRecents()
+
                                 onClose()
-                            },
+                            }
+                        },
                         modifier = Modifier
                             .background(Color.Gray.copy(alpha = 0.5f), CircleShape)
                             .size(40.dp)
@@ -1239,7 +1261,88 @@ fun CircleToSearchScreen(
                                     }
                                 }
                             }
+                            // --- TRANSLATE BUBBLE (Tir direct vers l'appli native) ---
+                            androidx.compose.material3.Surface(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
 
+                                        if (screenshot != null) {
+                                            scope.launch {
+                                                // 1. Sauvegarde et sécurisation de l'image
+                                                val path = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                    ImageUtils.saveBitmap(context, screenshot)
+                                                }
+                                                val file = java.io.File(path)
+                                                val uri = androidx.core.content.FileProvider.getUriForFile(
+                                                    context,
+                                                    "com.akslabs.circletosearch.fileprovider",
+                                                    file
+                                                )
+
+                                                // 2. LE TIR DIRECT (Méthode de Partage Implicite Explicite)
+                                                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                    type = "image/*"
+                                                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                                    // On autorise la lecture du fichier
+                                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+
+                                                    // Le secret est ici : On force la recherche du composant exact
+                                                    // qui gère la traduction d'image dans l'application
+                                                    setComponent(
+                                                        android.content.ComponentName(
+                                                            "com.google.android.apps.translate",
+                                                            "com.google.android.apps.translate.sharing.ShareActivity"
+                                                        )
+                                                    )
+                                                }
+
+                                                try {
+                                                    context.startActivity(intent)
+                                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { onClose() }
+                                                } catch (e: Exception) {
+                                                    // PLAN B : Le composant "ShareActivity" n'existe plus ou plante
+                                                    // On tente l'activité principale de traduction
+                                                    try {
+                                                        val fallbackIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                            type = "image/*"
+                                                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                            setComponent(
+                                                                android.content.ComponentName(
+                                                                    "com.google.android.apps.translate",
+                                                                    "com.google.android.apps.translate.TranslateActivity"
+                                                                )
+                                                            )
+                                                        }
+                                                        context.startActivity(fallbackIntent)
+                                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { onClose() }
+                                                    } catch (e2: Exception) {
+                                                        // PLAN C : L'app n'est vraiment pas là, on ouvre le navigateur web
+                                                        val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://translate.google.com"))
+                                                        webIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                        context.startActivity(webIntent)
+                                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { onClose() }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                shape = CircleShape,
+                                color = bubbleColor
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Translate,
+                                        contentDescription = "Translate",
+                                        tint = contentColor,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
                             // Fullscreen Scan Bubble (Anthracite / Dynamic)
                             androidx.compose.material3.Surface(
                                 modifier = Modifier

@@ -78,6 +78,7 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         configManager = OverlayConfigurationManager(this)
         
@@ -777,10 +778,10 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
     }
 
     private fun launchOverlay() {
-        android.util.Log.d("CircleToSearchAccess", "AccessibilityService launching OverlayActivity")
         val intent = Intent(this, OverlayActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION) // Disable animation for faster feel
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
         }
         startActivity(intent)
     }
@@ -790,12 +791,20 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {}
 
     companion object {
-        private var instance: CircleToSearchAccessibilityService? = null
-        private var isFlashlightOn = false // Simple static state tracking
+        @SuppressLint("StaticFieldLeak")
+        var instance: CircleToSearchAccessibilityService? = null
+        private var isFlashlightOn = false
 
         fun triggerCapture() {
-            android.util.Log.d("CircleToSearch", "triggerCapture static called. instance=${instance != null}")
             instance?.performCapture()
+        }
+        fun openRecents() {
+            instance?.performGlobalAction(GLOBAL_ACTION_RECENTS)
+        }
+
+        fun performBack() {
+            // GLOBAL_ACTION_BACK simule l'appui sur la touche retour du système
+            instance?.performGlobalAction(GLOBAL_ACTION_BACK)
         }
     }
 

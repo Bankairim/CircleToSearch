@@ -131,7 +131,7 @@ class OverlayConfigurationManager(private val context: Context) {
             height = h,
             xOffset = x,
             yOffset = y,
-            gestures = mutableMapOf(GestureType.LONG_PRESS to ActionType.CTS_MULTI)
+            gestures = mutableMapOf(GestureType.LONG_PRESS to ActionType.CTS_LENS)
         )
 
         return OverlayConfig(
