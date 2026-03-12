@@ -232,7 +232,25 @@ fun CircleToSearchScreen(
     
     // Track initialized engines for Smart Loading
     val initializedEngines = remember { mutableStateListOf<SearchEngine>() }
-    
+    //To avoid going to previous apps if the user is on the launcher interface
+    // To avoid going to previous apps if the user is on the launcher interface
+    val handleSmartExit = {
+        // On demande au service si on a démarré depuis le launcher
+        val isFromLauncher = CircleToSearchAccessibilityService.instance?.isStartedFromLauncher() ?: true
+
+        if (isFromLauncher) {
+            // Si on est sur le bureau -> on ferme juste (pas de switch)
+            onClose()
+        } else {
+            // Si on est dans une appli -> on fait le switch magique vers elle
+            scope.launch {
+                CircleToSearchAccessibilityService.openRecents()
+                delay(150) // Délai de stabilité
+                CircleToSearchAccessibilityService.openRecents()
+                onClose()
+            }
+        }
+    }
     // Save global preference if user toggles it for the MAIN engine (Google) - Optional choice, 
     // or we just keep it per session. Let's keep it simple: no auto-save of per-tab state to verify complex persistence yet.
     // simpler: If user toggles, we just update the state.
@@ -437,20 +455,7 @@ fun CircleToSearchScreen(
         } else if (scaffoldState.bottomSheetState.currentValue == androidx.compose.material3.SheetValue.PartiallyExpanded) {
             scope.launch { scaffoldState.bottomSheetState.hide() }
         } else {
-            // --- LA MAGIE DU DOUBLE-CLIC ---
-            scope.launch {
-                // 1. Premier clic : ouvre le gestionnaire
-                CircleToSearchAccessibilityService.openRecents()
-
-                // 2. On attend 100ms (le temps que le système réagisse)
-                delay(100)
-
-                // 3. Deuxième clic : sur Android, ça bascule sur l'appli précédente !
-                CircleToSearchAccessibilityService.openRecents()
-
-                // 4. On ferme l'overlay
-                onClose()
-            }
+            handleSmartExit()
         }
     }
 
@@ -994,15 +999,7 @@ fun CircleToSearchScreen(
                     IconButton(
                         onClick = {
                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-
-                            scope.launch {
-                                // Double appui pour switcher d'appli
-                                CircleToSearchAccessibilityService.openRecents()
-                                delay(50)
-                                CircleToSearchAccessibilityService.openRecents()
-
-                                onClose()
-                            }
+                            handleSmartExit()
                         },
                         modifier = Modifier
                             .background(Color.Gray.copy(alpha = 0.5f), CircleShape)

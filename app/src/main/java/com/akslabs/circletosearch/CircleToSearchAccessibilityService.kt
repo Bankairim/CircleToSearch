@@ -728,13 +728,23 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
         }
     }
 
+    private var packageBeforeCTS: String? = null // On mémorise l'appli ici
+
     private fun performCapture() {
         android.util.Log.d("CircleToSearch", "performCapture called. hasWindowManager=${windowManager != null}")
+
+        // --- ÉTAPE CRUCIALE : On capture l'identité de l'appli AVANT le screenshot ---
+        val root = rootInActiveWindow
+        if (root != null) {
+            val pkg = root.packageName?.toString()
+            // Si ce n'est pas notre propre appli, on enregistre qui c'est
+            if (pkg != null && pkg != packageName) {
+                packageBeforeCTS = pkg
+                android.util.Log.d("CTS_SMART", "Appli détectée au lancement : $pkg")
+            }
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Haptic Feedback (Crisp Click) - Moved to performAction, but keeping here specifically for direct calls if any
-             // (performAction handles its own vibration)
-            
-            // Execute immediately for instant trigger
             takeScreenshot(
                 Display.DEFAULT_DISPLAY,
                 executor,
@@ -743,38 +753,37 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
                         try {
                             val hardwareBuffer = screenshot.hardwareBuffer
                             val colorSpace = screenshot.colorSpace
-                            
                             val bitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, colorSpace)
                             if (bitmap == null) {
                                 hardwareBuffer.close()
                                 return
                             }
-
-                            // Copy to software bitmap
                             val copy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
-                            hardwareBuffer.close() // Close buffer after copy
+                            hardwareBuffer.close()
+                            if (copy == null) return
 
-                            if (copy == null) {
-                                return
-                            }
-                            
-                            // Store in Repository (In-Memory)
                             BitmapRepository.setScreenshot(copy)
-                            
-                            // Launch Overlay Immediately
                             launchOverlay()
-                            
+
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
                     }
-
                     override fun onFailure(errorCode: Int) {
-                        android.util.Log.e("CircleToSearch", "Screenshot failed with error code: $errorCode")
+                        android.util.Log.e("CircleToSearch", "Screenshot failed: $errorCode")
                     }
                 }
             )
         }
+    }
+
+    // Fonction de vérification à appeler depuis l'écran
+    fun isStartedFromLauncher(): Boolean {
+        val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
+        val resolveInfo = packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+        val launcherPackage = resolveInfo?.activityInfo?.packageName
+
+        return packageBeforeCTS == launcherPackage
     }
 
     private fun launchOverlay() {
@@ -785,9 +794,25 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
         }
         startActivity(intent)
     }
+    private var lastPackageName: String? = null
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // On traque le changement de fenêtre
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = event.packageName?.toString()
+            // On n'enregistre que si ce n'est pas notre propre appli CTS
+            if (pkg != null && pkg != packageName) {
+                lastPackageName = pkg
+            }
+        }
+    }
+    //To track if we're on the launcher or not
+    fun isPreviousAppLauncher(): Boolean {
+        val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
+        val resolveInfo = packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+        val launcherPackage = resolveInfo?.activityInfo?.packageName
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
-
+        return lastPackageName == launcherPackage
+    }
     override fun onInterrupt() {}
 
     companion object {
@@ -805,6 +830,10 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
         fun performBack() {
             // GLOBAL_ACTION_BACK simule l'appui sur la touche retour du système
             instance?.performGlobalAction(GLOBAL_ACTION_BACK)
+        }
+        fun shouldSmartExit(): Boolean {
+            // Si c'est le launcher, on dit "vrai" (on doit juste quitter)
+            return instance?.isPreviousAppLauncher() ?: true
         }
     }
 
